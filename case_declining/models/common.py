@@ -26,7 +26,8 @@ class CaseDecliningModelBase:
 
     def fit(self, train_x, train_y, epochs=600, shuffle=True, verbose=2):
         self.model.fit(train_x, train_y, epochs=epochs, verbose=verbose, shuffle=shuffle)
-        print(self.model.summary())
+        if verbose:
+            print(self.model.summary())
 
     def save(self):
         self.model.save(self.model_name)
