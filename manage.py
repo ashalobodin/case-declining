@@ -109,7 +109,7 @@ def bleu_score(ctx, data_set):
 
 
 @declining.command()
-@click.option('--hidden-units', type=int, multiple=True, default=[60, 80, 100], help='# hidden units')
+@click.option('--hidden-units', type=int, multiple=True, default=[60, 80, 100, 110, 120, 130], help='# hidden units')
 @click.option('--input-str', type=str, default='Шалободін Олександр Олександрович')
 @click.option('--verbose', type=int, default=0)
 @click.pass_context
@@ -122,43 +122,32 @@ def learning_curve_hidden_units(ctx, hidden_units, input_str, verbose):
     activation = 'softmax'
     epochs = 500
 
-    res = []
-
     for h_u in hidden_units:
         model = get_model(ctx.obj['model_type'], ctx.obj['model_name'], dc.input_shape, load=False,
                           hidden_units=h_u, activation=activation)
         model.fit(train_x, train_y, epochs=epochs, verbose=verbose)
-        pred = ["".join(dc.one_hot_decode(p, input_str)).title()
-                for p in model.predict(dc.get_string_encoded(input_str))][0]
+        # pred = ["".join(dc.one_hot_decode(p, input_str)).title()
+        #         for p in model.predict(dc.get_string_encoded(input_str))][0]
         val_score = calc_bleu_score(model, dc)
         test_score = calc_bleu_score(model, dc, "test_data")
 
-        res.append({
-            'Hidden units No': h_u,
-            'validation_score': val_score,
-            'generalization_score': test_score,
-            'pred': pred
-        })
+        print('Hidden units No', h_u)
+        print('validation_score', val_score)
+        print('generalization_score', test_score)
+        print()
 
         del model
 
-    for r in res:
-        for k, v in r.items():
-            print(k, v)
-        print()
-
 
 @declining.command()
-@click.option('--hidden-units', type=int, default=60, help='# hidden units')
 @click.option('--input-str', type=str, default='Шалободін Олександр Олександрович')
 @click.option('--verbose', type=int, default=0)
 @click.pass_context
-def learning_curve_ngrams(ctx, hidden_units, input_str, verbose):
+def learning_curve_ngrams(ctx, input_str, verbose):
+    hidden_units = 60
     activation = 'softmax'
     epochs = 350
-    res = []
-    # ngram_factors = [(4, 3, 3), (3, 3, 3), (4, 15, 15), (3, 15, 15)]
-    ngram_factors = [(3, 2, 2)]
+    ngram_factors = [(4, 15, 15), (4, 3, 3), (3, 15, 15), (3, 3, 3), (3, 2, 2)]
     for nf in ngram_factors:
         dc = DataConverter(ctx.obj['tdp'], ctx.obj['vdp'], ctx.obj['testdp'], nf)
         train_x = dc.get_column_encoded_data(dc.train_data)
@@ -167,28 +156,21 @@ def learning_curve_ngrams(ctx, hidden_units, input_str, verbose):
         model = get_model(ctx.obj['model_type'], ctx.obj['model_name'], dc.input_shape, load=False,
                           hidden_units=hidden_units, activation=activation)
         model.fit(train_x, train_y, epochs=epochs, verbose=verbose)
-        pred = ["".join(dc.one_hot_decode(p, input_str)).title()
-                for p in model.predict(dc.get_string_encoded(input_str))][0]
+        # pred = ["".join(dc.one_hot_decode(p, input_str)).title()
+        #         for p in model.predict(dc.get_string_encoded(input_str))][0]
         val_score = calc_bleu_score(model, dc)
         test_score = calc_bleu_score(model, dc, "test_data")
 
-        res.append({
-            'ngram-factors': nf,
-            'validation_score': val_score,
-            'generalization_score': test_score,
-            'pred': pred
-        })
+        print('ngram-factors', nf)
+        print('validation_score', val_score)
+        print('generalization_score', test_score)
+        print()
 
         del model
 
-    for r in res:
-        for k, v in r.items():
-            print(k, v)
-        print()
-
 
 @declining.command()
-@click.option('--dropout', multiple=True, default=[0., 0.2, 0.4, 0.6, 0.8], help='# hidden units')
+@click.option('--dropout', multiple=True, default=[0., 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4], help='# hidden units')
 @click.option('--input-str', type=str, default='Шалободін Олександр Олександрович')
 @click.option('--verbose', type=int, default=0)
 @click.pass_context
@@ -200,30 +182,22 @@ def learning_curve_dropout(ctx, dropout, input_str, verbose):
     dc = DataConverter(ctx.obj['tdp'], ctx.obj['vdp'], ctx.obj['testdp'], ngram_factors)
     train_x = dc.get_column_encoded_data(dc.train_data)
     train_y = dc.get_column_encoded_data(dc.train_data, dc.column_y)
-    res = []
     for dp in dropout:
 
         model = get_model(ctx.obj['model_type'], ctx.obj['model_name'], dc.input_shape, load=False,
                           hidden_units=hidden_units, activation=activation, dropout=dp)
         model.fit(train_x, train_y, epochs=epochs, verbose=verbose)
-        pred = ["".join(dc.one_hot_decode(p, input_str)).title()
-                for p in model.predict(dc.get_string_encoded(input_str))][0]
+        # pred = ["".join(dc.one_hot_decode(p, input_str)).title()
+        #         for p in model.predict(dc.get_string_encoded(input_str))][0]
         val_score = calc_bleu_score(model, dc)
         test_score = calc_bleu_score(model, dc, "test_data")
 
-        res.append({
-            'dropout': dp,
-            'validation_score': val_score,
-            'generalization_score': test_score,
-            'pred': pred
-        })
+        print('dropout', dp)
+        print('validation_score', val_score)
+        print('generalization_score', test_score)
+        print()
 
         del model
-
-    for r in res:
-        for k, v in r.items():
-            print(k, v)
-        print()
 
 
 if __name__ == '__main__':
