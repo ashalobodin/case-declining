@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.utils import shuffle
 
 from keras.preprocessing.sequence import pad_sequences
 from keras.preprocessing.text import Tokenizer
@@ -8,17 +9,17 @@ from keras.preprocessing.text import Tokenizer
 class DataConverter:
     COLUMN_X = 'X'              # nominative case
     COLUMN_Y = 'Y'              # genitive case
+    COLUMN_G = 'G'
     DELTA = 'delta'
 
-    def __init__(self, train_data_path, validation_data_path, test_data_path, ngram_factor, char_level=True):
+    def __init__(self, train_data_path, test_data_path, ngram_factor, char_level=True, tokeizer=None):
         self.ngram_factor = ngram_factor
-        self.tk = Tokenizer(char_level=char_level)
-        self.train_data = self.load_data(train_data_path)
-        self.val_data = self.load_data(validation_data_path)
+        self.tk = tokeizer or Tokenizer(char_level=char_level)
+        self.train_data = shuffle(self.load_data(train_data_path))
         self.test_data = self.load_data(test_data_path)
 
         self.max_length = max([self.train_data[col].str.len().max() for col in [self.column_x, self.column_y]])
-        self.tk.fit_on_texts(self.get_column_values(self.train_data, self.column_x))
+        self.tk.fit_on_texts(self.get_column_values(self.train_data, self.COLUMN_X))
         self.encoding_length = len(self.tk.index_word.keys())
 
     @property
@@ -34,7 +35,7 @@ class DataConverter:
         return self.max_length, self.encoding_length
 
     def load_data(self, filename):
-        df = pd.read_csv(filename, names=[self.COLUMN_X, self.COLUMN_Y])
+        df = pd.read_csv(filename, names=[self.COLUMN_G, self.COLUMN_X, self.COLUMN_Y])
         if self.ngram_factor:
             df[self.DELTA] = [
                 [len(y[i])-len(x[i])+self.ngram_factor[i] for i in range(3)]

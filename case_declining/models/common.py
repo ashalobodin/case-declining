@@ -15,8 +15,8 @@ class CaseDecliningModelBase:
 
     def __init__(self, model_name, input_shape, load=True, new_model_type=Sequential):
         self.input_shape = input_shape          # (max_length, encoding_length)
-        self.model_name = f'saved_models/{model_name}.h5'
-        self.model = load_model(self.model_name) if load else new_model_type()
+        self.model_name = f'{self.SAVED_MODELS_DIR}/{model_name}.h5'
+        self.model = load_model(self.model_name, compile=False) if load else new_model_type()
         self.batch_size = 1
 
     @staticmethod
@@ -24,13 +24,16 @@ class CaseDecliningModelBase:
         data = np.array(data)
         return data.reshape((1, *data.shape))
 
-    def fit(self, train_x, train_y, epochs=600, shuffle=True, verbose=2):
-        self.model.fit(train_x, train_y, epochs=epochs, verbose=verbose, shuffle=shuffle)
+    def fit(self, train_x, train_y, validation_split, epochs=600, shuffle=True, verbose=2):
+        history = self.model.fit(train_x, train_y, epochs=epochs, verbose=verbose, shuffle=shuffle,
+                                 validation_split=validation_split)
         if verbose:
             print(self.model.summary())
+            print([(k, v[-1]) for k, v in history.history.items()])
+        return history.history
 
-    def save(self):
-        self.model.save(self.model_name)
+    def save(self, name=None):
+        self.model.save(name or self.model_name)
 
     def predict(self, encoded_inp_value, verbose=0):
         if len(encoded_inp_value.shape) == 2:
