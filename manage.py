@@ -10,6 +10,7 @@ from case_declining.models.vanilla_ltsm import VanillaLTSM
 from case_declining.utils.data_utils import DataConverter
 
 from keras.optimizers import adam_v2
+# import tensorflow as tf
 
 
 plot_type_index_map = {'loss': 0, 'accuracy': 1, 'val_loss': 2, 'val_accuracy': 3}
@@ -46,8 +47,8 @@ def calc_bleu_score(model, dc, ds='val_data'):
 @click.option('--tdp', default='datasets/train_data.txt', type=str, help='Train data path')
 @click.option('--testdp', default='datasets/test_data.txt', type=str, help='Test data path')
 @click.option('--ngram-factor1', default=3, type=int, help='Surname ngram-factor')
-@click.option('--ngram-factor2', default=2, type=int, help='Name ngram-factor')
-@click.option('--ngram-factor3', default=2, type=int, help='Second name ngram-factor')
+@click.option('--ngram-factor2', default=3, type=int, help='Name ngram-factor')
+@click.option('--ngram-factor3', default=0, type=int, help='Second name ngram-factor')
 @click.option('--load-tk', is_flag=True)
 @click.pass_context
 def declining(ctx, type, name, tdp, testdp, ngram_factor1, ngram_factor2, ngram_factor3, load_tk):
@@ -83,12 +84,12 @@ def train(ctx, hidden_units, activation, epochs, dropout, validation_split, lear
         if model:
             history = model.fit(train_x, train_y, validation_split, epochs=epochs, verbose=verbose)
             test_score = calc_bleu_score(model, dc, "test_data")
-            print(f'Attempt {a}: test score {test_score}')
+            print(f"Attempt {a}: test score {test_score}")
             if test_score > max_test_score:
                 max_test_score = test_score
-                model.save()
-                with open(f"{model.SAVED_MODELS_DIR}/{ctx.obj['model_name']}.json", 'w') as f:
-                    json.dump(dc.tk.to_json(), f)
+                # model.save()
+                # with open(f"{model.SAVED_MODELS_DIR}/{ctx.obj['model_name']}.json", 'w') as f:
+                #     json.dump(dc.tk.to_json(), f)
                 max_history = history
 
     if max_history:
@@ -101,12 +102,56 @@ def train(ctx, hidden_units, activation, epochs, dropout, validation_split, lear
 
 @declining.command()
 @click.pass_context
+@click.option('--learning-rate', default=4e-3)
+@click.option('--epochs', type=int, default=80, help='# of epochs')
+@click.option('--validation-split', default=0.2)
+@click.option('--attempts', default=3)
+@click.option('--verbose', default=2, help='Verbose level')
+@click.option('--diff', is_flag=True)
+def retrain_predict(ctx, learning_rate, epochs, validation_split, attempts, verbose, diff):
+    dc = ctx.obj['data_converter']
+    train_x = dc.get_column_encoded_data(dc.train_data)
+    train_y = dc.get_column_encoded_data(dc.train_data, dc.column_y)
+
+    input_data = dc.test_data
+
+    best_model = None
+    max_test_score = 0
+    for a in range(attempts):
+        model = get_model(ctx.obj['model_type'], ctx.obj['model_name'], dc.input_shape, load=True)
+        if model:
+            optimizer = adam_v2.Adam(learning_rate=learning_rate)
+            model.model.compile(optimizer=optimizer, loss='binary_crossentropy')
+
+            model.model.fit(x=train_x, y=train_y, epochs=epochs, validation_split=validation_split, verbose=verbose)
+
+            test_score = calc_bleu_score(model, dc, "test_data")
+            print(f'Attempt {a}: test score {test_score}')
+            if test_score > max_test_score:
+                best_model = model
+
+            if test_score == 1.0:
+                model.save('saved_models/bbest.h5')
+                break
+
+    data = dc.get_column_encoded_data(input_data)
+    res = [dc.one_hot_decode(p, inp) for p, inp in zip(best_model.predict(data), input_data[dc.COLUMN_X])]
+    print(f'Predictive genitive case are:')
+    # TODO: vectorize
+    for i in range(len(input_data)):
+        y = input_data[dc.COLUMN_Y].iloc[i]
+        if not diff or y != res[i]:
+            print(input_data[dc.COLUMN_X].iloc[i], '->', res[i])
+
+
+@declining.command()
+@click.pass_context
 @click.option('--input-str', type=str, default='Шалободін Олександр Олександрович', help='Surname Name SecondName')
 def predict_one(ctx, input_str):
     dc = ctx.obj['data_converter']
     model = get_model(ctx.obj['model_type'], ctx.obj['model_name'], dc.input_shape, load=True)
     if model:
-        res = dc.one_hot_decode(model.predict(dc.get_string_encoded(input_str))[0], input_str)
+        res = dc.one_hot_decode(model.predict(dc.get_string_encoded(input_str.lower()))[0], input_str)
         print(f'Predictive genitive case is `{res}`')
 
 
@@ -129,6 +174,33 @@ def predict(ctx, data_set, diff):
             y = input_data[dc.COLUMN_Y].iloc[i]
             if not diff or y != res[i]:
                 print(input_data[dc.COLUMN_X].iloc[i], '->', res[i])
+
+
+@declining.command()
+@click.option('--data-set', type=click.Choice(['validation', 'test']), default='test',
+              help='Data set for prediction')
+@click.option('--diff', is_flag=True)
+@click.pass_context
+def predict_lite(ctx, data_set, diff):
+    # import tflit
+    dc = ctx.obj['data_converter']
+    input_data = dc.val_data if data_set == 'validation' else dc.test_data
+
+    model = get_model(ctx.obj['model_type'], ctx.obj['model_name'], dc.input_shape, load=True)
+    if model:
+        converter = tf.lite.TFLiteConverter.from_keras_model(model.model)
+        tflite_model = converter.convert()
+        with open('model3.tflite', 'wb') as f:
+            f.write(tflite_model)
+        # model = tflit.Model('model3.tflite')
+        # data = dc.get_column_encoded_data(input_data)
+        # res = [dc.one_hot_decode(p, inp) for p, inp in zip(model.predict(data), input_data[dc.COLUMN_X])]
+        # print(f'Predictive genitive case are:')
+        # TODO: vectorize
+        # for i in range(len(input_data)):
+        #     y = input_data[dc.COLUMN_Y].iloc[i]
+        #     if not diff or y != res[i]:
+        #         print(input_data[dc.COLUMN_X].iloc[i], '->', res[i])
 
 
 @declining.command()
@@ -178,12 +250,12 @@ def learning_curve_ngrams(ctx, input_str, validation_split, verbose):
 
 @declining.command()
 @click.pass_context
-@click.option('--dropout', multiple=True, default=[0.05, 0.1, 0.15, 0.2])
-@click.option('--unit', multiple=True, default=[80, 100, 120, 150])
+@click.option('--dropout', multiple=True, default=[0.2, 0.25])
+@click.option('--unit', multiple=True, default=[100, 120, 150])
 @click.option('--learning-rate', multiple=True, default=[1e-3, 2e-3, 5e-3])
 @click.option('--plot', type=click.Choice(['loss', 'accuracy', 'val_loss', 'val_accuracy']),
               multiple=True, default=['accuracy', 'val_accuracy'])
-@click.option('--validation-split', default=0.25)
+@click.option('--validation-split', default=0.15)
 @click.option('--filename')
 @click.option('--val-score-threshold', default=0.97)
 @click.option('--attempts', default=3)
@@ -192,7 +264,7 @@ def learning_curve_all(ctx, dropout, unit, learning_rate, plot, validation_split
     activation = 'softmax'
     epochs = 80
     ngram_factors = (3, 2, 2)
-    print(f'======= Plottinng learning curves for dropouts {dropout}, hidden units {unit}, '
+    print(f'======= Plotting learning curves for dropouts {dropout}, hidden units {unit}, '
           f'ngram_factors {ngram_factors}, learning rates {learning_rate} epochs {epochs} =======')
 
     dc = DataConverter(ctx.obj['tdp'], ctx.obj['testdp'], ngram_factors)

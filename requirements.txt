@@ -5,3 +5,16 @@ tensorflow==2.7.0
 scikit-learn==1.0.2
 nltk==3.6.7
 matplotlib==3.5.1
+
+pip~=21.3.1
+wheel~=0.37.1
+pytz~=2021.3
+numpy~=1.22.1
+six~=1.16.0
+h5py~=3.6.0
+scipy~=1.7.3
+wrapt~=1.13.3
+requests~=2.27.1
+setuptools~=60.5.0
+tflit~=0.1.2
+python-dateutil~=2.8.2
